@@ -1,7 +1,7 @@
 /* Datos */
 
 const DB_NAME = 'MediFastDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_PRODUCTOS = 'productos';
 const STORE_EVENTOS = 'eventos';
 
@@ -52,6 +52,8 @@ async function guardarProductos(productos) {
     const transaction = database.transaction(STORE_PRODUCTOS, 'readwrite');
     const store = transaction.objectStore(STORE_PRODUCTOS);
 
+    store.clear();
+
     productos.forEach((producto) => {
       store.put(producto);
     });
@@ -92,30 +94,28 @@ export async function registrarEvento(tipo, detalle = '') {
 
 export async function cargarProductos() {
   try {
+    const respuesta = await fetch('./data/productos.json');
+
+    if (!respuesta.ok) {
+      throw new Error('No se pudo cargar productos.json');
+    }
+
+    const productos = await respuesta.json();
+
+    await guardarProductos(productos);
+    registrarEvento('carga', 'json');
+
+    return productos;
+  } catch {
+    console.warn('No se pudo cargar el JSON. Se intentará leer desde IndexedDB.');
+
     const productosGuardados = await leerProductosDB();
 
     if (productosGuardados.length > 0) {
       registrarEvento('carga', 'indexeddb');
       return productosGuardados;
     }
-  } catch {
-    console.warn('No se pudo leer desde IndexedDB.');
+
+    throw new Error('No se pudieron cargar los productos.');
   }
-
-  const respuesta = await fetch('./data/productos.json');
-
-  if (!respuesta.ok) {
-    throw new Error('No se pudo cargar productos.json');
-  }
-
-  const productos = await respuesta.json();
-
-  try {
-    await guardarProductos(productos);
-    registrarEvento('carga', 'json');
-  } catch {
-    console.warn('No se pudo guardar en IndexedDB.');
-  }
-
-  return productos;
 }
